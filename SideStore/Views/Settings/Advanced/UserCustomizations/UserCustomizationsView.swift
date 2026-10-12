@@ -51,6 +51,7 @@ struct UserCustomizationsView: View {
     @State private var isFileSizeVerificationEnabled: Bool = UserDefaults.standard.isFileSizeVerificationEnabled
     @State private var permissionCheckingDisabled: Bool = UserDefaults.standard.permissionCheckingDisabled
     @State private var isCellularRefreshEnabled: Bool = UserDefaults.standard.isCellularRefreshEnabled
+    @State private var isKeepCellularDataEnabled: Bool = UserDefaults.standard.isKeepCellularDataEnabled
     @State private var turnOnDataShortcutName: String = UserDefaults.standard.turnOnDataShortcutName
     @State private var turnOffDataShortcutName: String = UserDefaults.standard.turnOffDataShortcutName
     @State private var turnOnBaseDelayText: String = {
@@ -605,7 +606,7 @@ struct UserCustomizationsView: View {
             VStack(spacing: 0) {
                 toggleRow(
                     title: "Cellular Refresh",
-                    subtitle: "Automatically toggle cellular data via Shortcuts during refresh",
+                    subtitle: "Allow refresh without Wi-Fi using the selected connection strategy",
                     isOn: Binding(
                         get: { isCellularRefreshEnabled },
                         set: { newValue in
@@ -614,6 +615,21 @@ struct UserCustomizationsView: View {
                         }
                     )
                 )
+
+                divider
+
+                toggleRow(
+                    title: "Keep Cellular Data On (Experimental)",
+                    subtitle: "Restart the paired-device connection instead of toggling cellular data",
+                    isOn: Binding(
+                        get: { isKeepCellularDataEnabled },
+                        set: { newValue in
+                            isKeepCellularDataEnabled = newValue
+                            CellularRefreshManager.shared.setKeepsCellularDataOn(newValue)
+                        }
+                    )
+                )
+                .disabled(!isCellularRefreshEnabled)
 
                 divider
 
@@ -751,6 +767,7 @@ struct UserCustomizationsView: View {
 
     private func resetCellularDefaults() {
         CellularRefreshManager.shared.resetToDefaults()
+        isKeepCellularDataEnabled = false
         turnOnDataShortcutName = AppConstants.Shortcuts.defaultTurnOnDataShortcutName
         turnOffDataShortcutName = AppConstants.Shortcuts.defaultTurnOffDataShortcutName
         turnOnBaseDelayText = String(AppConstants.Shortcuts.defaultTurnOnDataBaseDelay)

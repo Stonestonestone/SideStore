@@ -19,6 +19,11 @@ public final class CellularRefreshManager: @unchecked Sendable {
         get { lock.withLock { cachedDidTurnOffData } }
         set { lock.withLock { cachedDidTurnOffData = newValue } }
     }
+    private var cachedDidPrepareWithoutToggle = false
+    private var didPrepareWithoutToggle: Bool {
+        get { lock.withLock { cachedDidPrepareWithoutToggle } }
+        set { lock.withLock { cachedDidPrepareWithoutToggle = newValue } }
+    }
 
     private init() {}
 
@@ -39,8 +44,16 @@ public final class CellularRefreshManager: @unchecked Sendable {
         return !minimuxer.network.isWifiSatisfied
     }
 
+    public var keepsCellularDataOn: Bool {
+        return isEnabled && UserDefaults.standard.isKeepCellularDataEnabled
+    }
+
     public func setEnabled(_ enabled: Bool) {
         UserDefaults.standard.isCellularRefreshEnabled = enabled
+    }
+
+    public func setKeepsCellularDataOn(_ enabled: Bool) {
+        UserDefaults.standard.isKeepCellularDataEnabled = enabled
     }
 
     public static func sanitizeShortcutName(_ name: String, fallback: String = "") -> String {
@@ -144,6 +157,7 @@ public final class CellularRefreshManager: @unchecked Sendable {
     }
 
     public func resetToDefaults() {
+        setKeepsCellularDataOn(false)
         setTurnOffDataShortcutName(AppConstants.Shortcuts.defaultTurnOffDataShortcutName)
         setTurnOnDataShortcutName(AppConstants.Shortcuts.defaultTurnOnDataShortcutName)
         setTurnOffDataBaseDelayOverride(nil)
@@ -171,6 +185,28 @@ public final class CellularRefreshManager: @unchecked Sendable {
         return false
     }
 
+    private func reconnectMinimuxerKeepingCellularOn(reason: String) async -> Bool {
+        // This path needs real-device testing because RPPairing service behavior varies by iOS network state.
+        debugLog("[CellularRefreshManager] Keeping cellular data on; restarting minimuxer (reason: \(reason))...")
+        do {
+            await minimuxer.network.refreshEndpoint()
+            try await minimuxer.core.restart()
+            await minimuxer.network.refreshEndpoint()
+            let ready = await waitForMinimuxerReady(timeout: 5.0)
+            debugLog("[CellularRefreshManager] Keep-cellular minimuxer restart completed; ready=\(ready).")
+            return ready
+        } catch {
+            debugLog("[CellularRefreshManager] Keep-cellular minimuxer restart failed: \(error)")
+            return false
+        }
+    }
+
+    public func reconnectForAFCRecoveryIfNeeded() async -> Bool {
+        guard isSupported && keepsCellularDataOn else { return false }
+        guard !minimuxer.network.isWifiSatisfied else { return false }
+        return await reconnectMinimuxerKeepingCellularOn(reason: "AFC recovery")
+    }
+
     // public apis
     @discardableResult
     public func turnOffDataIfNeeded(addOnDelay: TimeInterval = 0) async -> Bool {
@@ -181,6 +217,13 @@ public final class CellularRefreshManager: @unchecked Sendable {
         guard !minimuxer.network.isWifiSatisfied else {
             debugLog("[CellularRefreshManager] Wi-Fi is active, skipping turnOff shortcut.")
             return false
+        }
+
+        if keepsCellularDataOn {
+            guard !didPrepareWithoutToggle else { return false }
+            let success = await reconnectMinimuxerKeepingCellularOn(reason: "cellular refresh preparation")
+            didPrepareWithoutToggle = success
+            return success
         }
 
         let success = await turnOffData()
@@ -195,6 +238,12 @@ public final class CellularRefreshManager: @unchecked Sendable {
 
     @discardableResult
     public func turnOnDataIfNeeded(addOnDelay: TimeInterval = 0) async -> Bool {
+        if didPrepareWithoutToggle {
+            didPrepareWithoutToggle = false
+            debugLog("[CellularRefreshManager] Keep-cellular operation completed; cellular data remained enabled.")
+            return true
+        }
+
         guard didTurnOffData else { return false }
 
         let success = await turnOnData()

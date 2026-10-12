@@ -1,0 +1,55 @@
+name: Keep Cellular On Test Build
+
+on:
+  push:
+    branches: [codex/keep-cellular-on]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: keep-cellular-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build unsigned test IPA
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install build tools
+        run: brew install ldid xcbeautify
+
+      - name: Configure test version
+        run: |
+          BASE_VERSION=$(python3 scripts/ci/workflow.py get-marketing-version)
+          SHORT_COMMIT=$(git rev-parse --short HEAD)
+          TEST_VERSION="${BASE_VERSION}-keepcell.${{ github.run_number }}+${SHORT_COMMIT}"
+          python3 scripts/ci/workflow.py set-marketing-version "$TEST_VERSION"
+          echo "TEST_VERSION=$TEST_VERSION" >> "$GITHUB_ENV"
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1.6.0
+        with:
+          xcode-version: "26.4"
+
+      - name: Build unsigned IPA
+        run: python3 scripts/ci/workflow.py build
+
+      - name: Record checksum
+        run: shasum -a 256 SideStore.ipa | tee SideStore.ipa.sha256
+
+      - name: Upload test IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SideStore-${{ env.TEST_VERSION }}
+          path: |
+            SideStore.ipa
+            SideStore.ipa.sha256
+          if-no-files-found: error

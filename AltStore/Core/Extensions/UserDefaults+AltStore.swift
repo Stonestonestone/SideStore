@@ -491,6 +491,11 @@ public extension UserDefaults
         set { self.set(newValue, forKey: #function) }
     }
 
+    @objc var isKeepCellularDataEnabled: Bool {
+        get { self.bool(forKey: #function) }
+        set { self.set(newValue, forKey: #function) }
+    }
+
     @objc var useLocalVPN: Bool {
         get { self.bool(forKey: #function) }
         set { self.set(newValue, forKey: #function) }
@@ -583,6 +588,7 @@ public extension UserDefaults
             #keyPath(UserDefaults.isRotateLogsOnStartupEnabled): true,
             #keyPath(UserDefaults.recreateDatabaseOnNextStart): false,
             #keyPath(UserDefaults.isCellularRefreshEnabled): false,
+            #keyPath(UserDefaults.isKeepCellularDataEnabled): false,
             #keyPath(UserDefaults.turnOffDataShortcutName): "TurnOffData",
             #keyPath(UserDefaults.turnOnDataShortcutName): "TurnOnData",
             #keyPath(UserDefaults.isPairingReset): true,
