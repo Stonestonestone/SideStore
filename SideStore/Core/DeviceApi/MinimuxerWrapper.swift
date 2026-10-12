@@ -199,36 +199,6 @@ func getDeviceConnectionMode() async -> DeviceConnectionMode {
     return await minimuxer.core.getConnectionMode()
 }
 
-func restoreMinimuxerDeviceEndpointAfterRestart() async -> Bool {
-    let config = ConnectionConfig.shared
-    let mode = await minimuxer.core.getConnectionMode()
-    let endpointIp: String?
-
-    switch mode {
-    case .localVPN:
-        let overrideIp = config.overrideTunnelPeerIp.trimmingCharacters(in: .whitespacesAndNewlines)
-        endpointIp = overrideIp.isEmpty ? config.tunnelPeerIp : overrideIp
-    case .remoteServer:
-        let remoteIp = config.remoteServerIp.trimmingCharacters(in: .whitespacesAndNewlines)
-        endpointIp = remoteIp.isEmpty ? nil : remoteIp
-    case .notConfigured:
-        endpointIp = nil
-    }
-
-    guard let endpointIp, !endpointIp.isEmpty else {
-        debugLog("[SideStore] Unable to restore minimuxer endpoint after restart: no endpoint is configured for .\(mode)")
-        return false
-    }
-    guard minimuxer.core.testDeviceConnection(ifaddr: endpointIp) else {
-        debugLog("[SideStore] Unable to restore minimuxer endpoint after restart: \(endpointIp) is not reachable")
-        return false
-    }
-
-    minimuxer.gateway.setDeviceEndpointIp(endpointIp)
-    debugLog("[SideStore] Restored minimuxer gateway endpoint after restart: \(endpointIp)")
-    return true
-}
-
 public func isMinimuxerReady() async -> Result<Bool, MinimuxerError> {
     let isEnabled = CellularRefreshManager.shared.isEnabled
     return await minimuxer.core.isReady(withNetworkCheck: !isEnabled)

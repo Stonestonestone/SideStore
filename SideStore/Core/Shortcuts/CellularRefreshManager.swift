@@ -191,10 +191,6 @@ public final class CellularRefreshManager: @unchecked Sendable {
         do {
             await minimuxer.network.refreshEndpoint()
             try await minimuxer.core.restart()
-            guard await restoreMinimuxerDeviceEndpointAfterRestart() else {
-                debugLog("[CellularRefreshManager] Keep-cellular minimuxer restart did not restore a reachable device endpoint.")
-                return false
-            }
             await minimuxer.network.refreshEndpoint()
             let ready = await waitForMinimuxerReady(timeout: 5.0)
             debugLog("[CellularRefreshManager] Keep-cellular minimuxer restart completed; ready=\(ready).")
